@@ -1,0 +1,44 @@
+#!/usr/bin/perl -w
+
+use Getopt::Std;
+getopts "b:r:e:k:m:";
+
+
+if ( (!defined $opt_r)|| (!defined $opt_e)|| (!defined $opt_k)) {
+    die "************************************************************************
+    Usage: ALLHiC_partition -r draft.asm.fasta -e enzyme_sites -k Num of groups
+      -h : help and usage.
+      -b : prunned bam (optional, default prunning.bam)
+      -r : draft.sam.fasta
+      -e : enzyme_sites (HindIII: AAGCTT; MboI: GATC)
+      -k : number of groups (user defined K value)
+      -m : minimum number of restriction sites (default, 25)
+************************************************************************\n";
+}
+
+my $bam     = (defined $opt_b)?$opt_b:"prunning.bam";
+my $refSeq  = $opt_r;
+my $esites  = uc $opt_e;
+$esites     = "AAGCTT" if($esites eq "HINDIII");
+$esites     = "GATC" if($esites eq "MBOI");
+
+
+my $K       = $opt_k;
+my $minRes  = (defined $opt_m)?$opt_m:25;   
+my $runcmd  = "";
+print "Extract function: calculate an empirical distribution of Hi-C link size based on intra-contig links\n";
+$runcmd     = "allhic extract ".$bam." ".$refSeq." --RE ".$esites;
+print "CMD: $runcmd\n";
+system($runcmd);
+
+
+print "Partition contigs based on prunning bam file\n";
+my $counts_file = $bam.".counts_".$esites.".txt";
+$counts_file    =~ s/.bam//g;
+my $pairs_file  = $bam.".pairs.txt";
+$pairs_file     =~ s/.bam//g;
+$runcmd         = "allhic partition $counts_file $pairs_file ".$K." --minREs ".$minRes;
+print "CMD: $runcmd\n";
+system($runcmd);
+
+

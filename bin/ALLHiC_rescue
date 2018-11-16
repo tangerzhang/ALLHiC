@@ -1,0 +1,174 @@
+#!/usr/bin/perl -w
+
+use Getopt::Std;
+getopts "b:r:c:i:m:";
+
+
+
+if ( (!defined $opt_b)|| (!defined $opt_r)|| (!defined $opt_c)|| (!defined $opt_i)) {
+    die "**************************************************************************************
+    Usage: ALLHiC_rescue -r draft.asm.fasta -b sample.clean.bam -c clusters.txt -i counts.file
+      -h : help and usage.
+      -b : sample.clean.bam (unpruned bam)
+      -r : draft.sam.fasta
+      -c : prunning.clusters.txt
+      -i : prunning.counts_AAGCTT.txt
+      -m : minimum single density for rescuing contigs (optional, default 0.01)
+**************************************************************************************\n";
+}
+
+my $bam         = $opt_b;
+my $refSeq      = $opt_r;
+my $clusters    = $opt_c;
+my $counts_file = $opt_i;
+my $minSig      = (defined $opt_m)?$opt_m:0.01;
+
+print "Starting rescue ungrouped contigs\n";
+print "Reading contig length\n";
+my %ctgdb;
+open(IN, $counts_file) or die"";
+while(<IN>){
+	chomp;
+	next if(/#/);
+	my ($ctg, $RECounts, $len) = split(/\s+/,$_);
+	$ctgdb{$ctg}->{'RECounts'} = $RECounts;
+	$ctgdb{$ctg}->{'length'}   = $len;
+	}
+close IN;
+
+print "Reading link signals ...\n";      
+my %signaldb;
+my @bamList = split(/,/,$opt_b);
+foreach my $bam (@bamList){
+	print "Reading $bam\n";
+	open(my $in, "samtools view $bam|") or die"";
+	while(<$in>){
+		chomp;
+		my ($reads,$ctga,$ctgb) = (split/\s+/,$_)[0,2,6];
+		next if($ctgb eq "=");
+		next if($ctgb eq "*");
+		my ($a,$b) = sort ($ctga,$ctgb);
+		my $key    = $a.",".$b;
+		$signaldb{$key}++;
+		}
+	close $in;
+	}
+
+print "find ungrouped contigs ...\n";
+my %GROUPDB;
+my %anchordb;
+my $gid = 0;
+open(IN, $clusters) or die"";
+while(<IN>){
+	chomp;
+	next if(/#/);
+	$gid++;
+	my @data = split(/\s+/,$_);
+	foreach my $i(2..$#data){
+		$anchordb{$data[$i]} = $gid;
+		my $g = "group".$gid;
+		$GROUPDB{$g}->{'origin'} .= $data[$i]." ";
+		}
+	}
+close IN;
+
+print "output HiC link signals ...\n";
+open(OUT, "> signals.txt") or die"";
+print OUT "#GID	unclustered_ctg	Linked_reads	Anchored_ctgs\n";
+foreach my $key (keys %signaldb){
+	my ($a,$b) = split(/,/,$key);
+	$a         = "group".$anchordb{$a} if(exists($anchordb{$a}));
+	$b         = "group".$anchordb{$b} if(exists($anchordb{$b}));
+	next if($a=~/group/ and $b=~/group/);
+	next if(!($a=~/group/) and !($b=~/group/));
+	($a,$b) = sort ($a,$b);
+	my ($ca,$cb) = split(/,/,$key);
+	my $another_ctg;
+	$another_ctg = $ca if($ca ne $b);
+	$another_ctg = $cb if($cb ne $b);
+	if(!exists($ctgdb{$ca}->{'length'})){
+		print "WARNING: $ca not found in $counts_file, PASS\n";
+		next;
+		}
+	if(!exists($ctgdb{$cb}->{'length'})){
+		print "WARNING: $cb not found in $counts_file, PASS\n";
+		next;
+		}	
+	my $lenA     = $ctgdb{$ca}->{'length'};
+	my $lenB     = $ctgdb{$cb}->{'length'};
+	my $sigD     = ($signaldb{$key}*1000)/($lenA+$lenB);
+	   $sigD     = sprintf("%.2f",$sigD);
+	print OUT "$a	$b	$sigD	$another_ctg\n"
+	}
+close OUT;
+
+my %infordb;
+my %groupdb;
+open(IN, "signals.txt") or die"";
+while(<IN>){
+	chomp;
+	next if(/#/);
+	my ($gid,$ctg,$value) = (split/\s+/,$_)[0,1,2];
+	$infordb{$ctg}->{$gid} += $value;  
+	$groupdb{$gid}++;
+	}
+close IN;
+
+my $num_of_groups = keys %groupdb;
+open(OUT, "> unanchor.signal.txt") or die "";
+print OUT "unanchored_contig	";
+foreach my $gid(sort keys %groupdb){
+	print OUT "$gid	";
+	}
+print OUT "best_group	best_ctg1	sigD	best_ctg2\n";
+
+foreach my $ctg (sort keys %infordb){
+	my $v    = 0;
+	my $maxv = 0;
+	print OUT "$ctg	";
+	foreach my $g(sort keys %groupdb){
+		$v  = $infordb{$ctg}->{$g} if(exists($infordb{$ctg}->{$g}));
+		$v  = 0 if(!exists($infordb{$ctg}->{$g}));
+		$v  = sprintf ("%.2f",$v);
+		$maxv = $v if($v>$maxv);
+	  print OUT "$v	";
+		}
+	next if($maxv<=$minSig); ### minimum singal density should be larger than 0.01
+	my $count = 0;
+	my $best_g;
+	foreach $g (sort {$infordb{$ctg}->{$b}<=>$infordb{$ctg}->{$a}} keys %{$infordb{$ctg}}){
+		$count++;
+		last if($count>1);
+		$best_g = $g;
+		}
+	print OUT "$best_g	$maxv\n";
+	$GROUPDB{$best_g}->{'rescued'} .= $ctg." ";
+#	my $line = `grep \'$ctg\' signals.txt |grep \'$best_g\' |sort -k 3 -n -r |head -n 2|cut -f4`;
+#	my ($best_ctg1,$best_ctg2) = split(/\n/,$line);
+#	print OUT "$best_ctg1	$maxv	$best_ctg2	\n";
+	}
+close OUT;
+
+print "Output refined clusters \n";
+foreach my $gid (keys %GROUPDB){
+	my @odb = split(/\s+/,$GROUPDB{$gid}->{'origin'});
+	$GROUPDB{$gid}->{'rescued'} = "" if(!exists($GROUPDB{$gid}->{'rescued'}));
+	my @rdb = split(/\s+/,$GROUPDB{$gid}->{'rescued'});
+	my $no  = @odb;
+	my $nr  = @rdb;
+	print "Number of original contigs in $gid: $no\n";
+	print "Number of rescued contigs in $gid: $nr\n";
+	my $outfile = $gid.".txt";
+	open(my $out, "> $outfile") or die"";
+	print $out "#Contig	RECounts	Length\n";
+	map {print $out "$_	$ctgdb{$_}->{'RECounts'}	$ctgdb{$_}->{'length'}\n"} @odb;
+	map {print $out "$_	$ctgdb{$_}->{'RECounts'}	$ctgdb{$_}->{'length'}\n"} @rdb;
+	close $out;	
+	}
+
+
+
+
+
+
+
