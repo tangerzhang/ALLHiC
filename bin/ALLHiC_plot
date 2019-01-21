@@ -81,17 +81,19 @@ def convert_read_pos(read_on_ctg, ctg_on_chr):
 # Get chromosome length
 def get_chr_len(chr_list):
 	chr_len_db = {}
+	chr_order = []
 	with open(chr_list, 'r') as f_in:
 		for line in f_in:
 			if line.strip() == '':
 				continue
 			data = line.strip().split()
+			chr_order.append(data[0])
 			chr_len_db[data[0]] = int(data[1])
-	return chr_len_db
+	return chr_len_db, chr_order
 
 
 # Calc read counts on each bin
-def calc_read_count_per_bin(chr_len_db, read_on_chr, bin_size):
+def calc_read_count_per_bin(chr_len_db, chr_order, read_on_chr, bin_size):
 	long_bin_size = bin_size.upper()
 	long_bin_size = long_bin_size.replace('K', '000')
 	long_bin_size = long_bin_size.replace('M', '000000')
@@ -101,20 +103,14 @@ def calc_read_count_per_bin(chr_len_db, read_on_chr, bin_size):
 	read_count_per_chr = {}
 	read_count_whole_genome = {}
 	
-	bin_offset = [0 for i in range(0, len(chr_len_db)+1)]
-	bin_count = [0 for i in range(0, len(chr_len_db)+1)]
+	bin_offset = [0 for i in range(0, len(chr_order)+1)]
+	bin_count = [0 for i in range(0, len(chr_order)+1)]
 	total_bin_count = 0
 	
 	for chrn in chr_len_db:
 		bin_count_of_chr = int(round((chr_len_db[chrn]*1.0/long_bin_size+0.5)))
-		i = -1
-		while chrn[i].isdigit():
-			i -= 1
-		i += 1
-		chr_index = int(chrn[i:])
 		total_bin_count += bin_count_of_chr
-		bin_count[chr_index] = bin_count_of_chr
-		
+		bin_count[chr_order.index(chrn)+1] = bin_count_of_chr
 		read_count_per_chr[chrn] = [[0 for i in range(0, bin_count_of_chr)] for j in range(0, bin_count_of_chr)]
 	
 	for i in range(0, len(bin_count)):
@@ -132,17 +128,9 @@ def calc_read_count_per_bin(chr_len_db, read_on_chr, bin_size):
 		if chr1 == chr2 and chr1 in read_count_per_chr:
 			read_count_per_chr[chr1][pos1_index][pos2_index] += 1
 			read_count_per_chr[chr1][pos2_index][pos1_index] += 1
-		i = -1
-		while chr1[i].isdigit():
-			i -= 1
-		i += 1
-		chr1_index = int(chr1[i:]) - 1
 
-		i = -1
-		while chr2[i].isdigit():
-			i -= 1
-		i += 1
-		chr2_index = int(chr2[i:]) - 1
+		chr1_index = chr_order.index(chr1)
+		chr2_index = chr_order.index(chr2)
 
 		whole_pos1 = bin_offset[chr1_index] + pos1_index
 		whole_pos2 = bin_offset[chr2_index] + pos2_index
@@ -242,7 +230,7 @@ if __name__ == "__main__":
 		read_on_chr = convert_read_pos(get_read_pos_with_sam_bam_file(sam_bam_file), get_contig_pos_with_agp_file(agp_file))
 
 		print(time.strftime('[%H:%M:%S]',time.localtime(time.time()))+" Step 2: Get chromosome length")
-		chr_len_db = get_chr_len(chr_list)
+		chr_len_db, chr_order = get_chr_len(chr_list)
 		
 		print(time.strftime('[%H:%M:%S]',time.localtime(time.time()))+" Step 3: Calculating and Drawing heatmap")
 
@@ -250,7 +238,7 @@ if __name__ == "__main__":
 		for bin_size in bin_size_list:
 
 			print(time.strftime('[%H:%M:%S]',time.localtime(time.time()))+" Calculating")
-			read_count_per_chr, read_count_whole_genome = calc_read_count_per_bin(chr_len_db, read_on_chr, bin_size)
+			read_count_per_chr, read_count_whole_genome = calc_read_count_per_bin(chr_len_db, chr_order, read_on_chr, bin_size)
 			
 			print(time.strftime('[%H:%M:%S]',time.localtime(time.time()))+" Drawing heatmap")
 		
