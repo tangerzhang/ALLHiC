@@ -164,9 +164,12 @@ def draw_heatmap(data, chrn, bin_size, ext):
 	import matplotlib.pyplot as plt
 
 	short_bin_size = bin_size.upper()
-	short_bin_size = short_bin_size.replace('000000000', 'G')
-	short_bin_size = short_bin_size.replace('000000', 'M')
-	short_bin_size = short_bin_size.replace('000', 'K')
+	if bin_size[-9:] == '000000000':
+		short_bin_size = bin_size[:-9]+'G'
+	elif bin_size[-6:] == '000000':
+		short_bin_size = bin_size[:-6]+'M'
+	elif bin_size[-3:] == '000':
+		short_bin_size = bin_size[:-3]+'K'
 
 	ax = plt.gca()
 	
