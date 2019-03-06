@@ -105,9 +105,9 @@ unless ( -e $fasta) {
 
 $ARGV[2] = uc $ARGV[2];
 my $RE_site;
-if($ARGV[2] eq "HINDIII"){
+if($ARGV[2] eq "HINDIII" or $ARGV[2] eq "AAGCTT"){
   $RE_site = 'AAGCTT';
-  }elsif($ARGV[2] eq "MBOI"){
+  }elsif($ARGV[2] eq "MBOI" or $ARGV[2] eq "GATC"){
   $RE_site = 'GATC';
   }
 # Find the input file's "head" and extension.
