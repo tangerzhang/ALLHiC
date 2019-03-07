@@ -15,6 +15,7 @@ $/='>';
 while(<IN>){
 	chomp;
 	my ($ctg,$seq) = split(/\n/,$_,2);
+	$ctg	       =~ s/\s+.*//g;
 	$seq           =~ s/\s+//g;
 	$seqdb{$ctg}   = $seq;
 	}
