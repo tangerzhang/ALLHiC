@@ -2,13 +2,28 @@
 import os
 import sys
 import gc
-from math import log
+import numpy as np
 import time
 
 
 # Get position of read based on contig with sam or bam file
-def get_read_pos_with_sam_bam_file(sam_bam_file):
-	read_on_ctg = {}
+def get_read_pos(agp_file, sam_bam_file):
+	ctg_on_chr = {}
+	with open(agp_file, 'r') as f_in:
+		for line in f_in:
+			if line.strip() == '':
+				continue
+			data = line.strip().split()
+			if data[4] == 'U':
+				continue
+			chrn = data[0]
+			start_pos = int(data[1])
+			end_pos = int(data[2])
+			ctg = data[5]
+			direct = data[-1]
+			ctg_on_chr[ctg] = [chrn, start_pos, end_pos, direct]
+	
+	read_on_chr = {}
 	if sam_bam_file[-3:] == "bam":
 		f_in = os.popen("samtools view "+sam_bam_file, 'r')
 	else:
@@ -28,36 +43,7 @@ def get_read_pos_with_sam_bam_file(sam_bam_file):
 		else:
 			ctg2 = ctg1
 		read_pos2 = int(data[7])
-		read_on_ctg[read_id] = [ctg1, read_pos1, ctg2, read_pos2]
-	f_in.close()
-	return read_on_ctg
-
-
-# Get position of contig based on chromosome with agp file
-def get_contig_pos_with_agp_file(agp_file):
-	ctg_on_chr = {}
-	with open(agp_file, 'r') as f_in:
-		for line in f_in:
-			if line.strip() == '':
-				continue
-			data = line.strip().split()
-			if data[4] == 'U':
-				continue
-			chrn = data[0]
-			start_pos = int(data[1])
-			end_pos = int(data[2])
-			ctg = data[5]
-			direct = data[-1]
-			ctg_on_chr[ctg] = [chrn, start_pos, end_pos, direct]
-	return ctg_on_chr
-
-
-# Convert contig-based read position to chromosome-based read position
-def convert_read_pos(read_on_ctg, ctg_on_chr):
-	read_on_chr = {}
-	f_pos = open('Read_position.list', 'w')
-	for read in read_on_ctg:
-		ctg1, read_pos1, ctg2, read_pos2 = read_on_ctg[read]
+		# Convert pos
 		if ctg1 not in ctg_on_chr or ctg2 not in ctg_on_chr:
 			continue
 		chrn1, ctg_start_pos1, ctg_end_pos1, ctg_direct1 = ctg_on_chr[ctg1]
@@ -70,11 +56,8 @@ def convert_read_pos(read_on_ctg, ctg_on_chr):
 			converted_pos2 = ctg_start_pos2 + read_pos2 - 1
 		else:
 			converted_pos2 = ctg_end_pos2 - read_pos2 + 1
-		read_on_chr[read] = [chrn1, converted_pos1, chrn2, converted_pos2]
-		f_pos.write('%s\t%s\t%d\t%s\t%d\n'%(read, chrn1, converted_pos1, chrn2, converted_pos2))
-	f_pos.close()
-	del read_on_ctg, ctg_on_chr
-	gc.collect()
+		read_on_chr[read_id] = [chrn1, converted_pos1, chrn2, converted_pos2]
+	f_in.close()
 	return read_on_chr
 
 
@@ -136,24 +119,44 @@ def calc_read_count_per_bin(chr_len_db, chr_order, read_on_chr, bin_size):
 		whole_pos2 = bin_offset[chr2_index] + pos2_index
 		read_count_whole_genome[whole_pos1][whole_pos2] += 1
 		read_count_whole_genome[whole_pos2][whole_pos1] += 1
-	
-	for chrn in read_count_per_chr:
-		for i in range(0, len(read_count_per_chr[chrn])):
-			for j in range(0, len(read_count_per_chr[chrn][i])):
-				if read_count_per_chr[chrn][i][j] != 0:
-					read_count_per_chr[chrn][i][j] = log(read_count_per_chr[chrn][i][j], 2)
-				else:
-					read_count_per_chr[chrn][i][j] = -float('inf')
-	
-	for i in range(0, len(read_count_whole_genome)):
-		for j in range(0, len(read_count_whole_genome[i])):
-			if read_count_whole_genome[i][j] != 0:
-				read_count_whole_genome[i][j] = log(read_count_whole_genome[i][j], 2)
-			else:
-				read_count_whole_genome[i][j] = -float('inf')
-
-
 	return read_count_per_chr, read_count_whole_genome
+
+
+# Draw heatmap of all chromosomes in one picture
+def draw_heatmap_in_one(data, bin_size, chr_order, ext):
+	import matplotlib as mpl
+	mpl.use('Agg')
+	import matplotlib.pyplot as plt
+
+	short_bin_size = bin_size.upper()
+	if bin_size[-9:] == '000000000':
+		short_bin_size = bin_size[:-9]+'G'
+	elif bin_size[-6:] == '000000':
+		short_bin_size = bin_size[:-6]+'M'
+	elif bin_size[-3:] == '000':
+		short_bin_size = bin_size[:-3]+'K'
+
+	file_prefix = short_bin_size + '_all_chrs'
+	print(time.strftime('[%H:%M:%S]',time.localtime(time.time()))+' Draw '+file_prefix)
+	chr_cnt = len(data)
+	col_cnt = int(np.sqrt(chr_cnt))
+	row_cnt = int(round(np.sqrt(chr_cnt)+0.5))
+	plt.figure(figsize=(col_cnt*2, row_cnt*2))
+	i = 1
+	for chrn in chr_order:
+		plt.subplot(row_cnt, col_cnt, i)
+		i += 1
+		ax = plt.gca()
+		cmap = plt.get_cmap('YlOrRd')
+		cmap.set_over('black')
+		with np.errstate(divide='ignore'):
+			hmap = ax.imshow(np.log2(data[chrn]), interpolation='nearest', origin='lower', cmap=cmap, aspect='auto')
+		plt.tick_params(labelsize=5)
+		plt.title(chrn)
+	
+	plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.5, hspace=0.5)
+	plt.savefig(file_prefix+'.'+ext, filetype=ext, bbox_inches='tight', dpi=200)
+	plt.close('all')
 
 
 # Draw heatmap of allhic result with matplotlib
@@ -170,7 +173,7 @@ def draw_heatmap(data, chrn, bin_size, ext):
 		short_bin_size = bin_size[:-6]+'M'
 	elif bin_size[-3:] == '000':
 		short_bin_size = bin_size[:-3]+'K'
-
+	
 	ax = plt.gca()
 	
 	if chrn != 'all':
@@ -184,9 +187,11 @@ def draw_heatmap(data, chrn, bin_size, ext):
 	cmap = plt.get_cmap('YlOrRd')
 	cmap.set_over('black')
 	if chrn != 'all':
-		hmap = ax.imshow(data, interpolation='nearest', origin='lower', cmap=cmap, aspect='auto')
+		with np.errstate(divide='ignore'):
+			hmap = ax.imshow(np.log2(data), interpolation='nearest', origin='lower', cmap=cmap, aspect='auto')
 	else:
-		hmap = ax.imshow(data, interpolation='nearest', cmap=cmap, aspect='auto')
+		with np.errstate(divide='ignore'):
+			hmap = ax.imshow(np.log2(data), interpolation='nearest', cmap=cmap, aspect='auto')
 	
 	plt.colorbar(mappable=hmap,cax=None, ax=None, shrink=0.5)
 	plt.tick_params(labelsize=6)
@@ -216,7 +221,7 @@ if __name__ == "__main__":
 	if len(sys.argv) < 6:
 		print("This script is used to plot chromatin matrix for ALLHiC results")
 		print("Usage: python "+sys.argv[0]+" <sam/bam file> <agp_file> <chr_list> <bin_size> <ext>")
-		print("\t<sam/bam_file> is the sam or bam file filtered by allhic")
+		print("\t<sam/bam_file> is the sam or bam file of mapping")
 		print("\t<agp_file> is the file created by allhic")
 		print("\t<chr_list> is the file containing chromosome ID and length")
 		print("\t<bin_size> is the bin size of heatmap, it can be a list splited by comma")
@@ -230,7 +235,7 @@ if __name__ == "__main__":
 		ext = sys.argv[5]
 		
 		print(time.strftime('[%H:%M:%S]',time.localtime(time.time()))+" Step 1: Get read position based on chromosome")
-		read_on_chr = convert_read_pos(get_read_pos_with_sam_bam_file(sam_bam_file), get_contig_pos_with_agp_file(agp_file))
+		read_on_chr = get_read_pos(agp_file, sam_bam_file)
 
 		print(time.strftime('[%H:%M:%S]',time.localtime(time.time()))+" Step 2: Get chromosome length")
 		chr_len_db, chr_order = get_chr_len(chr_list)
@@ -246,10 +251,12 @@ if __name__ == "__main__":
 			print(time.strftime('[%H:%M:%S]',time.localtime(time.time()))+" Drawing heatmap")
 		
 			print(time.strftime('[%H:%M:%S]',time.localtime(time.time()))+" Drawing with bin size "+str(bin_size))
+			
 			for chrn in read_count_per_chr:
 				draw_heatmap(read_count_per_chr[chrn], chrn, bin_size, ext)
-			
 			draw_heatmap(read_count_whole_genome, 'all', bin_size, ext)
+			
+			draw_heatmap_in_one(read_count_per_chr, bin_size, chr_order, ext)
 			del read_count_per_chr, read_count_whole_genome
 			gc.collect()
 		
