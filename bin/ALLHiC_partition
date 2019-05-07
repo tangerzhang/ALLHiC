@@ -12,7 +12,7 @@ if ( (!defined $opt_r)|| (!defined $opt_e)|| (!defined $opt_k)) {
       -r : draft.sam.fasta
       -e : enzyme_sites (HindIII: AAGCTT; MboI: GATC)
       -k : number of groups (user defined K value)
-      -m : minimum number of restriction sites (default, 10)
+      -m : minimum number of restriction sites (default, 25)
 ************************************************************************\n";
 }
 
