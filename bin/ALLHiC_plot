@@ -19,7 +19,7 @@ def get_read_pos(agp_file, sam_bam_file):
 			chrn = data[0]
 			start_pos = int(data[1])
 			end_pos = int(data[2])
-			ctg = data[5]
+			ctg = data[5].replace('_pilon', '')
 			direct = data[-1]
 			ctg_on_chr[ctg] = [chrn, start_pos, end_pos, direct]
 	
