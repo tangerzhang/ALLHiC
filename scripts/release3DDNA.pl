@@ -1,9 +1,9 @@
 #!/usr/bin/perl -w
 
-die "Usage: perl $0 No_of_chr\n" if(!defined ($ARGV[0]));
+die "Usage: perl $0 No_of_chr seq.FINAL.fasta\n" if(!defined ($ARGV[0]) or !defined($ARGV[1]));
 my $Kchr = $ARGV[0];
 
-open(IN, "seq.FINAL.fasta") or die"";
+open(IN, $ARGV[1]) or die"";
 $/='>';
 <IN>;
 while(<IN>){
