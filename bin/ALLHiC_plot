@@ -141,6 +141,7 @@ def draw_heatmap_in_one(data, bin_size, chr_order, ext):
 	chr_cnt = len(data)
 	col_cnt = int(np.sqrt(chr_cnt))
 	row_cnt = int(round(np.sqrt(chr_cnt)+0.5))
+	col_cnt = int(round(chr_cnt*1.0/row_cnt+0.5))
 	plt.figure(figsize=(col_cnt*2, row_cnt*2))
 	i = 1
 	for chrn in chr_order:
