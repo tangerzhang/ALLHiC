@@ -139,7 +139,6 @@ def draw_heatmap_in_one(data, bin_size, chr_order, ext):
 	file_prefix = short_bin_size + '_all_chrs'
 	print(time.strftime('[%H:%M:%S]',time.localtime(time.time()))+' Draw '+file_prefix)
 	chr_cnt = len(data)
-	col_cnt = int(np.sqrt(chr_cnt))
 	row_cnt = int(round(np.sqrt(chr_cnt)+0.5))
 	col_cnt = int(round(chr_cnt*1.0/row_cnt+0.5))
 	plt.figure(figsize=(col_cnt*2, row_cnt*2))
