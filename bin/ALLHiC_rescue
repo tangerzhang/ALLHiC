@@ -63,10 +63,10 @@ while(<IN>){
 	chomp;
 	next if(/#/);
 	$gid++;
+	my $g = "group".$gid;
 	my @data = split(/\s+/,$_);
 	foreach my $i(2..$#data){
 		$anchordb{$data[$i]} = $gid;
-		my $g = "group".$gid;
 		$GROUPDB{$g}->{'origin'} .= $data[$i]." ";
 		}
 	}
@@ -77,28 +77,27 @@ open(OUT, "> signals.txt") or die"";
 print OUT "#GID	unclustered_ctg	Linked_reads	Anchored_ctgs\n";
 foreach my $key (keys %signaldb){
 	my ($a,$b) = split(/,/,$key);
-	$a         = "group".$anchordb{$a} if(exists($anchordb{$a}));
-	$b         = "group".$anchordb{$b} if(exists($anchordb{$b}));
-	next if($a=~/group/ and $b=~/group/);
-	next if(!($a=~/group/) and !($b=~/group/));
-	($a,$b) = sort ($a,$b);
-	my ($ca,$cb) = split(/,/,$key);
-	my $another_ctg;
-	$another_ctg = $ca if($ca ne $b);
-	$another_ctg = $cb if($cb ne $b);
-	if(!exists($ctgdb{$ca}->{'length'})){
-		print "WARNING: $ca not found in $counts_file, PASS\n";
+	next if(exists($anchordb{$a}) and exists($anchordb{$b}));
+	next if(!exists($anchordb{$a}) and !exists($anchordb{$b}));
+#	$a         = "group".$anchordb{$a} if(exists($anchordb{$a}));
+#	$b         = "group".$anchordb{$b} if(exists($anchordb{$b}));
+#	next if($a=~/group/ and $b=~/group/);
+#	next if(!($a=~/group/) and !($b=~/group/));
+	my $ga  = (exists($anchordb{$a}))?$a:$b; ### anchored contig should be placed in the first row
+	my $ub  = (!exists($anchordb{$b}))?$b:$a;### followed by unanchored contig
+	if(!exists($ctgdb{$a}->{'length'})){
+		print "WARNING: $a not found in $counts_file, PASS\n";
 		next;
 		}
-	if(!exists($ctgdb{$cb}->{'length'})){
-		print "WARNING: $cb not found in $counts_file, PASS\n";
+	if(!exists($ctgdb{$b}->{'length'})){
+		print "WARNING: $b not found in $counts_file, PASS\n";
 		next;
 		}	
-	my $lenA     = $ctgdb{$ca}->{'length'};
-	my $lenB     = $ctgdb{$cb}->{'length'};
+	my $lenA     = $ctgdb{$ga}->{'length'};
+	my $lenB     = $ctgdb{$ub}->{'length'};
 	my $sigD     = ($signaldb{$key}*1000)/($lenA+$lenB);
-	   $sigD     = sprintf("%.2f",$sigD);
-	print OUT "$a	$b	$sigD	$another_ctg\n"
+	#   $sigD     = sprintf("%.2f",$sigD);
+	print OUT "group$anchordb{$ga}	$ub	$sigD	$ga\n"
 	}
 close OUT;
 
@@ -129,11 +128,11 @@ foreach my $ctg (sort keys %infordb){
 	foreach my $g(sort keys %groupdb){
 		$v  = $infordb{$ctg}->{$g} if(exists($infordb{$ctg}->{$g}));
 		$v  = 0 if(!exists($infordb{$ctg}->{$g}));
-		$v  = sprintf ("%.2f",$v);
+#		$v  = sprintf ("%.2f",$v);
 		$maxv = $v if($v>$maxv);
 	  print OUT "$v	";
 		}
-	next if($maxv<=$minSig); ### minimum singal density should be larger than 0.01
+#	next if($maxv<=$minSig); ### minimum singal density should be larger than 0.01
 	my $count = 0;
 	my $best_g;
 	foreach $g (sort {$infordb{$ctg}->{$b}<=>$infordb{$ctg}->{$a}} keys %{$infordb{$ctg}}){
@@ -141,8 +140,9 @@ foreach my $ctg (sort keys %infordb){
 		last if($count>1);
 		$best_g = $g;
 		}
-	print OUT "$best_g	$maxv\n";
-	$GROUPDB{$best_g}->{'rescued'} .= $ctg." ";
+	print OUT "$best_g	$maxv #\n" if($maxv<=$minSig);
+	print OUT "$best_g      $maxv \n" if($maxv>$minSig);
+	$GROUPDB{$best_g}->{'rescued'} .= $ctg." " if($maxv>$minSig);
 #	my $line = `grep \'$ctg\' signals.txt |grep \'$best_g\' |sort -k 3 -n -r |head -n 2|cut -f4`;
 #	my ($best_ctg1,$best_ctg2) = split(/\n/,$line);
 #	print OUT "$best_ctg1	$maxv	$best_ctg2	\n";
@@ -165,10 +165,6 @@ foreach my $gid (keys %GROUPDB){
 	map {print $out "$_	$ctgdb{$_}->{'RECounts'}	$ctgdb{$_}->{'length'}\n"} @rdb;
 	close $out;	
 	}
-
-
-
-
 
 
 
