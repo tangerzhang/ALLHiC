@@ -15,7 +15,7 @@ if ((!defined $opt_g)|| (!defined $opt_r)) {
 ************************************************************************\n";
 }
 
-my $bam    = (defined %opt_b)?$opt_b:"prunning.bam";
+my $bam    = (defined $opt_b)?$opt_b:"prunning.bam";
 my $table  = $opt_g;
 my $wrkd   = (defined $opt_d)?$opt_d:"wrk_dir";
 my $refSeq = $opt_r;
