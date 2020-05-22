@@ -1,7 +1,7 @@
 #!/usr/bin/perl -w
 
 use Getopt::Std;
-getopts "g:d:b:r:";
+getopts "g:d:b:r:l:";
 
 
 if ((!defined $opt_g)|| (!defined $opt_r)) {
@@ -12,6 +12,7 @@ if ((!defined $opt_g)|| (!defined $opt_r)) {
       -b : optional,default prunning.bam
       -r : reference ctg assembly
       -d : optional, default wrk_dir
+      -l : chrn.list
 ************************************************************************\n";
 }
 
@@ -19,6 +20,19 @@ my $bam    = (defined $opt_b)?$opt_b:"prunning.bam";
 my $table  = $opt_g;
 my $wrkd   = (defined $opt_d)?$opt_d:"wrk_dir";
 my $refSeq = $opt_r;
+
+if(!defined $opt_l){
+  system("cut -f1 $table |sort -u > chrn.list");
+  $opt_l = "chrn.list";
+  }
+my %chrnListdb;
+open(IN, $opt_l) or die"";
+while(<IN>){
+  chomp;
+  my $chrn = (split/\s+/,$_)[0];
+  $chrnListdb{$chrn}++;
+  }
+close IN;
 
 ### Read referece ctg fasta
 my %refdb = ();
@@ -29,7 +43,7 @@ while(<IN>){
 	if(/>/){
 		$ctgn = $_;
 		$ctgn =~ s/>//g;
-		$ctgn =~ s/\s+//g;
+		$ctgn =~ s/\s+.*//g;
 	}else{
 		$refdb{$ctgn} .= $_;
 		}
@@ -83,6 +97,8 @@ foreach my $ctg (keys %ctgdb){
 system("rm -rf $wrkd");
 system("mkdir $wrkd");
 foreach my $chrn (keys %chrdb){
+	next if(!exists($chrnListdb{$chrn}));
+	print "Process $chrn ...\n";
 	system("rm -rf $wrkd/$chrn");
 	system("mkdir $wrkd/$chrn");
 	my @ctgdb  = split(/,/,$chrdb{$chrn});
@@ -108,8 +124,6 @@ foreach my $chrn (keys %chrdb){
 	system("rm $wrkd/$chrn/prunning.sub.sam");
 	
 	}
-
-
 
 
 
