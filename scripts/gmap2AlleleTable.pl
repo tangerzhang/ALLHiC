@@ -6,7 +6,7 @@ open(IN, "grep 'gene' gmap.gff3 |") or die"";
 while(<IN>){
 	chomp;
 	my @data = split(/\s+/,$_);
-	my $gene = $1 if(/Name=(\S+)/);
+	my $gene = $1 if(/Name=([^;\n]*)/);
 	$infordb{$gene} .= $data[0]."	";
 	}
 close IN;
