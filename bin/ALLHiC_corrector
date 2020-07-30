@@ -1,0 +1,312 @@
+#!/usr/bin/env python
+import sys
+import multiprocessing
+import math
+import numpy as np
+import pysam
+import time
+import argparse
+
+
+def time_print(str):
+	print("\033[32m%s\033[0m %s"%(time.strftime('[%H:%M:%S]',time.localtime(time.time())), str))
+
+
+def get_opt():
+	group = argparse.ArgumentParser()
+	group.add_argument("-m", "--mapping", help="Input mapping file", required=True)
+	group.add_argument("-r", "--reference", help="Contig fasta file", required=True)
+	group.add_argument("-o", "--output", help="Corrected fasta file", required=True)
+	group.add_argument("-p", "--percent", type=float, help="Percent of the map to saturate, default is 0.95", default=0.95)
+	group.add_argument("-s", "--sensitive", type=float, help="sensitivity to depletion score, default is 0.5", default=0.5)
+	group.add_argument("-q", "--mapq", type=int, help="MAPQ of mapping lower bound, default is 1", default=1)
+	group.add_argument("-w", "--wide", type=int, help="Resolution for first pass search of mismatches, default is 25000 bp", default=25000)
+	group.add_argument("-n", "--narrow", type=int, help="Resolution for the precise mismatch localizaton, n<w default is 1000 bp", default=1000)
+	group.add_argument("-d", "--depletion", type=int, help="The size of the region to aggregate the depletion score in the wide path, d >= 2*w, default is 100000 bp", default=100000)
+	group.add_argument("-t", "--threads", type=int, help="Threads, default is 1", default=1)
+
+	return group.parse_args()
+
+
+def get_ctg_len(bam):
+	ctg_len = {}
+	for item in bam.header["SQ"]:
+		item = dict(item)
+		ctg_len[item['SN']] = item['LN']
+
+	return ctg_len
+
+
+def get_pos_list(bam_fetch, min_mapq):
+	pos_list = []
+	for line in bam_fetch:
+		ctg1 = line.reference_name
+		ctg2 = line.next_reference_name
+		pos1 = line.reference_start
+		pos2 = line.next_reference_start
+		if pos1 == -1 or pos2 == -1 or ctg1 != ctg2 or line.mapq < min_mapq:
+			continue
+		pos_list.append([pos1, pos2])
+	
+	return pos_list
+
+
+def get_hic_list(pos_list, bin_size):
+	hic_db = {}
+	hic_list = []
+
+	pos_mat = np.matrix(pos_list)
+	pos_mat = pos_mat//bin_size*bin_size
+	
+	for i in range(0, len(pos_mat)):
+		key = (pos_mat[i, 0], pos_mat[i, 1])
+		if key not in hic_db:
+			hic_db[key] =0
+		hic_db[key] += 1
+	for key in hic_db:
+		hic_list.append([key[0], key[1], hic_db[key]])
+
+	return hic_list
+
+
+def calc_sat_level(hic_list, pct):
+	tmp_list = []
+	nan_cnt = 0
+	for i in range(0, len(hic_list)):
+		if hic_list[i][0] != hic_list[i][1]:
+			if math.isnan(hic_list[i][2]):
+				nan_cnt += 1
+				tmp_list.append(0)
+			else:
+				tmp_list.append(hic_list[i][2])
+	if tmp_list == []:
+		return -1
+	tmp_list = sorted(tmp_list)
+	for i in range(0, nan_cnt):
+		tmp_list[i] = float('nan')
+	if len(tmp_list) == 1:
+		return tmp_list[0]
+	else:
+		pos = pct*(len(tmp_list)+1)
+		if pos<1:
+			return tmp_list[0]
+		else:
+			if pos >= len(tmp_list):
+				return tmp_list[-1]
+			else:
+				d = pos-int(pos)
+				return tmp_list[int(pos)-1]+d*(tmp_list[int(pos)]-tmp_list[int(pos)-1])
+
+
+def precompute_dep_score(hic_list, bin_size, dep_size, sat_level):
+	score_db = {}
+	for s, e, val in hic_list:
+		if math.isnan(val):
+			continue
+		if e-s>dep_size:
+			continue
+		if val >= sat_level:
+			val = sat_level
+		for i in range(s+bin_size, e, bin_size):
+			if i not in score_db:
+				score_db[i] = 0
+			score_db[i] += val
+	pos = score_db.keys()
+	if len(pos) != 0:
+		return score_db, min(pos), max(pos)
+	else:
+		return score_db, 0, 0
+
+
+def get_sub_score_db(score_db, min_pos, max_pos, bin_size, dep_size):
+	sub_score_db = {}
+	for i in range(min_pos+dep_size-2*bin_size, max_pos-dep_size+3*bin_size, bin_size):
+		if i in score_db:
+			sub_score_db[i] = score_db[i]
+		else:
+			sub_score_db[i] = 0
+	return sub_score_db
+
+
+def get_wide_mismatch(score_db, thr, bin_size):
+	tmp_list = [[]]
+	for i in sorted(score_db):
+		if score_db[i] < thr:
+			if tmp_list[-1] == []:
+				tmp_list[-1].append(i)
+		else:
+			if tmp_list[-1] != []:
+				tmp_list[-1].append(i)
+				tmp_list.append([])
+	if len(tmp_list[-1]) == 1:
+		tmp_list[-1].append(i+bin_size)
+	elif len(tmp_list[-1]) == 0:
+		del tmp_list[-1]
+	return tmp_list
+	
+
+def get_mismatch(hic_list, bin_size, dep_size, pct, sens, is_wide):
+	sat_level = round(calc_sat_level(hic_list, pct), 5)
+	if sat_level == -1:
+		return []
+	thr = sens*sat_level*0.5*dep_size/bin_size*(dep_size/bin_size-1)
+	score_db, min_pos, max_pos = precompute_dep_score(hic_list, bin_size, dep_size, sat_level)
+	if len(score_db) != 0:
+		score_db = get_sub_score_db(score_db, min_pos, max_pos, bin_size, dep_size)
+	if is_wide:
+		if len(score_db) != 0:
+			wide_mismatch = get_wide_mismatch(score_db, thr, bin_size)
+		else:
+			wide_mismatch = []
+		return wide_mismatch
+	else:
+		return score_db
+
+
+def merge_region(wide_list, narrow_score, bin_size):
+	idx_wide = 0
+	min_val = 0
+	tmp_list = []
+	if narrow_score == {}:
+		return wide_list
+	for pos in sorted(narrow_score):
+		if idx_wide >= len(wide_list):
+			break
+		if pos <= wide_list[idx_wide][0]:
+			min_val = narrow_score[pos]
+		else:
+			if narrow_score[pos] < min_val:
+				min_val = narrow_score[pos]
+		if pos+bin_size <= wide_list[idx_wide][0]:
+			continue
+		if pos >= wide_list[idx_wide][1]:
+			for i in range(wide_list[idx_wide][0], wide_list[idx_wide][1], bin_size):
+				if i in narrow_score and narrow_score[i] == min_val:
+					tmp_list.append([i, i+bin_size])
+			idx_wide += 1
+	if idx_wide < len(wide_list):
+		for i in range(wide_list[idx_wide][0], wide_list[idx_wide][1], bin_size):
+				if i in narrow_score and narrow_score[i] == min_val:
+					tmp_list.append([i, i+bin_size])
+	if tmp_list == []:
+		return wide_list
+	narrow_mismatch = []
+	last_e = 0
+	for s, e in tmp_list:
+		if last_e == 0:
+			narrow_mismatch.append([s])
+			last_e = e
+		else:
+			if s != last_e:
+				narrow_mismatch[-1].append(last_e)
+				narrow_mismatch.append([s])
+		last_e = e
+	
+	narrow_mismatch[-1].append(last_e)
+
+	return narrow_mismatch
+		
+
+def pipeline(in_bam, mapq, dep_size, bin_size, narrow_bin_size, percent, sensitive, ctg):
+	time_print("\tContig: %s Getting mapping list"%ctg)
+	with pysam.AlignmentFile(in_bam, 'rb') as bam:
+		mapping_list = get_pos_list(bam.fetch(contig=ctg), mapq)
+	
+	if mapping_list == []:
+		time_print("\tContig: %s Could not found mapping list"%ctg)
+		return []
+	
+	time_print("\tContig: %s Getting hic list with bin size: %d"%(ctg, bin_size))
+	hic_list = get_hic_list(mapping_list, bin_size)
+
+	time_print("\tContig: %s Getting wide mismatch"%ctg)
+	wide_mismatch = get_mismatch(hic_list, bin_size, dep_size, percent, sensitive, True)
+	if wide_mismatch == []:
+		time_print("\tContig: %s Could not found mismatch"%ctg)
+		return []
+	
+	dep_size = bin_size
+	bin_size = narrow_bin_size
+
+	time_print("\tContig: %s Getting narrow score with bin size: %d"%(ctg, bin_size))
+	hic_list = get_hic_list(mapping_list, bin_size)
+
+	narrow_score = get_mismatch(hic_list, bin_size, dep_size, percent, sensitive, False)
+	
+	time_print("\tContig: %s Getting narrow mismatch"%ctg)
+	narrow_mismatch = merge_region(wide_mismatch, narrow_score, bin_size)
+	if narrow_mismatch == wide_mismatch:
+		time_print("\tContig: %s Wide mismatch without update"%ctg)
+	return narrow_mismatch
+
+
+def ALLHiC_correct(in_bam, in_fa, out_fa, mapq, dep_size, bin_size, narrow_bin_size, percent, sensitive, thread):
+	time_print("Reading mapping")
+	with pysam.AlignmentFile(in_bam, 'rb') as bam:
+		ctg_len = get_ctg_len(bam)
+
+	time_print("Running pipeline")
+	pool = multiprocessing.Pool(processes=thread)
+	res = []
+	for ctg in ctg_len:
+		r = pool.apply_async(pipeline, (in_bam, mapq, dep_size, bin_size, narrow_bin_size, percent, sensitive, ctg,))
+		res.append([ctg, r])
+	pool.close()
+	pool.join()
+	
+	bam.close()
+	narrow_mismatch = {}
+	for ctg, r in res:
+		sub_mismatch = r.get()
+		if sub_mismatch != []:
+			narrow_mismatch[ctg] = sub_mismatch
+	
+	time_print("Found all mismatches")
+	
+	time_print("Reading origin fasta")
+	fa_db = {}
+	with open(in_fa, 'r') as fin:
+		for line in fin:
+			if line[0] == '>':
+				id = line.strip().split()[0][1:]
+				fa_db[id] = []
+			else:
+				fa_db[id].append(line.strip())
+	
+	for id in fa_db:
+		fa_db[id] = ''.join(fa_db[id])
+	
+	time_print("Writing result")
+	with open(out_fa, 'w') as fout:
+		for ctg in sorted(fa_db):
+			if ctg in narrow_mismatch:
+				base = 0
+				for s, e in narrow_mismatch[ctg]:
+					s = s-1
+					e = e-1
+					fout.write(">%s_%d_%d\n%s\n"%(ctg, base+1, s, fa_db[ctg][base: s]))
+					fout.write(">%s_%d_%d\n%s\n"%(ctg, s+1, e, fa_db[ctg][s: e]))
+					base = e
+				if base < len(fa_db[ctg]):
+					fout.write(">%s_%d_%d\n%s\n"%(ctg, base, len(fa_db[ctg]), fa_db[ctg][base:]))
+			else:
+				fout.write(">%s\n%s\n"%(ctg, fa_db[ctg]))
+	
+	time_print("Finished")
+
+
+if __name__ == "__main__":
+	opts = get_opt()
+	in_bam = opts.mapping
+	in_fa = opts.reference
+	out_fa = opts.output
+	mapq = opts.mapq
+	percent = opts.percent
+	sensitive = opts.sensitive
+	dep_size = opts.depletion
+	bin_size = opts.wide
+	narrow_bin_size = opts.narrow
+	thread = opts.threads
+	ALLHiC_correct(in_bam, in_fa, out_fa, mapq, dep_size, bin_size, narrow_bin_size, percent, sensitive, thread)
+
+
