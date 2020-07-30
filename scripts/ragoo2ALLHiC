@@ -26,13 +26,13 @@ if ((!defined $opt_l)|| (!defined $opt_r) ||(!defined $opt_b)) {
 $opt_e = (defined $opt_e)?$opt_e:"GATC";
 
 
-if(-e "draft.asm.fasta"){
+if(!(-e "draft.asm.fasta")){
 	system("ln -s $opt_r ./draft.asm.fasta");
 }else{
 	print "check draft.asm.fasta file, exist\n";
 	}
 
-if(-e "sample.clean.bam"){
+if(!(-e "sample.clean.bam")){
 	system("ln -s $opt_b ./sample.clean.bam");
 }else{
 	print "check sample.clean.bam file, exist\n";
