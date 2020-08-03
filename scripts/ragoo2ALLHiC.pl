@@ -47,8 +47,8 @@ while(<IN>){
 	$num_g++;
 	my @linedb = split(/\n/,$_);
 	foreach my $file (@linedb){
-		
-		$gid = $file; $gid =~ s/_orderings.txt//g;
+		$gid = (split/\//,$file)[-1];
+		$gid =~ s/_orderings.txt//g;
 		open(my $fh, $file) or die"";
 		while(<$fh>){
 			chomp;
