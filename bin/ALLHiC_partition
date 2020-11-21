@@ -28,7 +28,7 @@ my $minRes  = (defined $opt_m)?$opt_m:25;
 my $runcmd  = "";
 print "Extract function: calculate an empirical distribution of Hi-C link size based on intra-contig links\n";
 if ($esites eq "ARIMA") {
-  $runcmd     = "allhic extract ".$bam." ".$refSeq." --RE GATCGATC,GANTGATC,GANTANTC,GATCANTC";
+  $runcmd     = "allhic extract ".$bam." ".$refSeq." --RE='GATCGATC,GANTGATC,GANTANTC,GATCANTC'";
 }
 else {
   $runcmd     = "allhic extract ".$bam." ".$refSeq." --RE ".$esites;
