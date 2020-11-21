@@ -87,7 +87,7 @@ sub run_cmd(@) {
 
 # Get the command-line arguments, or check syntax.
 if ( @ARGV != 3 ) {
-    print STDERR "\nPreprocessSAMs.pl: A script to prepare SAM or BAM files for use with Lachesis.\n\nSyntax: $0 <sam-or-bam-filename> <draft-assembly-fasta> enzyme(HINDIII/MBOI)\n\n";
+    print STDERR "\nPreprocessSAMs.pl: A script to prepare SAM or BAM files for use with Lachesis.\n\nSyntax: $0 <sam-or-bam-filename> <draft-assembly-fasta> enzyme(HINDIII/MBOI/Arima)\n\n";
     exit;
 }
 
@@ -109,6 +109,8 @@ if($ARGV[2] eq "HINDIII" or $ARGV[2] eq "AAGCTT"){
   $RE_site = 'AAGCTT';
   }elsif($ARGV[2] eq "MBOI" or $ARGV[2] eq "GATC"){
   $RE_site = 'GATC';
+  }elsif($ARGV[2] eq "ARIMA"){
+  $RE_site = 'arima';
   }
 # Find the input file's "head" and extension.
 my ($head,$extension) = $SAM =~ /^(.*)\.(.*)$/;
@@ -131,8 +133,28 @@ print "$0 @ARGV\n\n";
 # make_bed_around_RE_site.pl             <fasta>.near_<RE>.<range>.bed                 Prepare the bed file for bedtools intersect (next command)
 #
 # Make the BED file for the restriction sites on the draft assembly.  This only needs to be done once.
-my $BED_RE_file = "$fasta.near_$RE_site.500.bed";
-run_cmd( "$make_bed_around_RE_site_pl $fasta $RE_site 500" ) unless -e $BED_RE_file;
+my $BED_RE_file;
+if ($RE_site eq "arima") {
+	$BED_RE_file = "$fasta.near_arima.500.bed";
+
+	my $BED_re_file_gatc = "$fasta.near_GATC.500.bed";
+	my $BED_re_file_gaat = "$fasta.near_GAAT.500.bed";
+	my $BED_re_file_gact = "$fasta.near_GACT.500.bed";
+	my $BED_re_file_gagt = "$fasta.near_GAGT.500.bed";
+	my $BED_re_file_gatt = "$fasta.near_GATT.500.bed";
+
+	run_cmd( "$make_bed_around_RE_site_pl $fasta GATC 500" ) unless -e $BED_re_file_gatc;
+	run_cmd( "$make_bed_around_RE_site_pl $fasta GAAT 500" ) unless -e $BED_re_file_gaat;
+	run_cmd( "$make_bed_around_RE_site_pl $fasta GACT 500" ) unless -e $BED_re_file_gact;
+	run_cmd( "$make_bed_around_RE_site_pl $fasta GAGT 500" ) unless -e $BED_re_file_gagt;
+	run_cmd( "$make_bed_around_RE_site_pl $fasta GATT 500" ) unless -e $BED_re_file_gatt;
+
+	run_cmd( "cat $BED_re_file_gatc $BED_re_file_gaat $BED_re_file_gact $BED_re_file_gagt $BED_re_file_gatt | sort -k1,1 -k2,2b -u > $BED_RE_file" );
+}
+else {
+    $BED_RE_file = "$fasta.near_$RE_site.500.bed";
+	run_cmd( "$make_bed_around_RE_site_pl $fasta $RE_site 500" ) unless -e $BED_RE_file;
+}
 
 
 # Do the pre-processing on this file.
