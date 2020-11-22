@@ -10,7 +10,7 @@ if ( (!defined $opt_r)|| (!defined $opt_e)|| (!defined $opt_k)) {
       -h : help and usage.
       -b : prunned bam (optional, default prunning.bam)
       -r : draft.sam.fasta
-      -e : enzyme_sites (HindIII: AAGCTT; MboI: GATC)
+      -e : enzyme_sites (HindIII: AAGCTT; MboI: GATC, Arima)
       -k : number of groups (user defined K value)
       -m : minimum number of restriction sites (default, 25)
 ************************************************************************\n";
@@ -27,7 +27,12 @@ my $K       = $opt_k;
 my $minRes  = (defined $opt_m)?$opt_m:25;   
 my $runcmd  = "";
 print "Extract function: calculate an empirical distribution of Hi-C link size based on intra-contig links\n";
-$runcmd     = "allhic extract ".$bam." ".$refSeq." --RE ".$esites;
+if ($esites eq "ARIMA") {
+  $runcmd     = "allhic extract ".$bam." ".$refSeq." --RE='GATCGATC,GANTGATC,GANTANTC,GATCANTC'";
+}
+else {
+  $runcmd     = "allhic extract ".$bam." ".$refSeq." --RE ".$esites;
+}
 print "CMD: $runcmd\n";
 system($runcmd);
 
