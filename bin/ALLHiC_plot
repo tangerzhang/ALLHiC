@@ -113,7 +113,7 @@ def calc_read_count_per_bin(chr_len_db, chr_order, read_on_chr, bin_size):
 				read_count_per_chr[chr1][pos1_index][pos2_index] += 1
 				read_count_per_chr[chr1][pos2_index][pos1_index] += 1
 			except Exception:
-				print(time.strftime('[%H:%M:%S]',time.localtime(time.time()))+"Index error on single chromosome: index1: %d, index2: %d, bin counts: %d"%(pos1_index, pos2_index, bin_count_of_chr))
+				print(time.strftime('[%H:%M:%S]',time.localtime(time.time()))+"Index error: chromosome: %s, length: %d, position1: %d, index1: %d, position2: %d, index2: %d, bin counts: %d"%(chr1, chr_len_db[chr1], pos1, pos1_index, pos2, pos2_index, bin_count_of_chr))
 
 		chr1_index = chr_order.index(chr1)
 		chr2_index = chr_order.index(chr2)
