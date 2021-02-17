@@ -109,16 +109,22 @@ def calc_read_count_per_bin(chr_len_db, chr_order, read_on_chr, bin_size):
 		pos1_index = int(pos1/long_bin_size)
 		pos2_index = int(pos2/long_bin_size)
 		if chr1 == chr2 and chr1 in read_count_per_chr:
-			read_count_per_chr[chr1][pos1_index][pos2_index] += 1
-			read_count_per_chr[chr1][pos2_index][pos1_index] += 1
+			try:
+				read_count_per_chr[chr1][pos1_index][pos2_index] += 1
+				read_count_per_chr[chr1][pos2_index][pos1_index] += 1
+			except Exception:
+				print(time.strftime('[%H:%M:%S]',time.localtime(time.time()))+"Index error on single chromosome: index1: %d, index2: %d, bin counts: %d"%(pos1_index, pos2_index, bin_count_of_chr))
 
 		chr1_index = chr_order.index(chr1)
 		chr2_index = chr_order.index(chr2)
-
+		
 		whole_pos1 = bin_offset[chr1_index] + pos1_index
 		whole_pos2 = bin_offset[chr2_index] + pos2_index
-		read_count_whole_genome[whole_pos1][whole_pos2] += 1
-		read_count_whole_genome[whole_pos2][whole_pos1] += 1
+		try:
+			read_count_whole_genome[whole_pos1][whole_pos2] += 1
+			read_count_whole_genome[whole_pos2][whole_pos1] += 1
+		except Exception:
+			print(time.strftime('[%H:%M:%S]',time.localtime(time.time()))+"Index error on whole genome: index1: %d, index2: %d, bin counts: %d"%(whole_pos1, whole_pos2, total_bin_count))
 	return read_count_per_chr, read_count_whole_genome
 
 
