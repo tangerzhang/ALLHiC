@@ -91,7 +91,7 @@ def calc_read_count_per_bin(chr_len_db, chr_order, read_on_chr, bin_size):
 	total_bin_count = 0
 	
 	for chrn in chr_len_db:
-		bin_count_of_chr = int(round((chr_len_db[chrn]*1.0/long_bin_size+0.5)))
+		bin_count_of_chr = int(round((chr_len_db[chrn]*1.0/long_bin_size+0.51)))
 		total_bin_count += bin_count_of_chr
 		bin_count[chr_order.index(chrn)+1] = bin_count_of_chr
 		read_count_per_chr[chrn] = [[0 for i in range(0, bin_count_of_chr)] for j in range(0, bin_count_of_chr)]
@@ -139,8 +139,8 @@ def draw_heatmap_in_one(data, bin_size, chr_order, ext):
 	file_prefix = short_bin_size + '_all_chrs'
 	print(time.strftime('[%H:%M:%S]',time.localtime(time.time()))+' Draw '+file_prefix)
 	chr_cnt = len(data)
-	row_cnt = int(round(np.sqrt(chr_cnt)+0.5))
-	col_cnt = int(round(chr_cnt*1.0/row_cnt+0.5))
+	row_cnt = int(round(np.sqrt(chr_cnt)+0.51))
+	col_cnt = int(round(chr_cnt*1.0/row_cnt+0.51))
 	plt.figure(figsize=(col_cnt*2, row_cnt*2))
 	i = 1
 	for chrn in chr_order:
