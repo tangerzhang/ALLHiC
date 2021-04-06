@@ -92,7 +92,7 @@ bwa mem -t $threads seq.HiCcorrected.fasta Lib_R1.fastq.gz Lib_R2.fastq.gz \
 
 
 ### filter bam
-samtools view -bq $threads sample.bwa_mem.bam  |samtools view -bt seq.HiCcorrected.fasta.fai > sample.unique.bam
+samtools view -bq 40 sample.bwa_mem.bam  |samtools view -bt seq.HiCcorrected.fasta.fai > sample.unique.bam
 PreprocessSAMs.pl sample.unique.bam seq.HiCcorrected.fasta $enzyme
 
 ### partition
