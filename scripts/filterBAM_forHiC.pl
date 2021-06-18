@@ -2,11 +2,11 @@
 
 die "Usage: perl $0 file.bam out.sam\n" if(!defined($ARGV[0]) or !defined($ARGV[1]));
 open(OUT, "> $ARGV[1]") or die"";
-my ($NM,$XM,$XO,$XG) = 0;
 open(IN, "samtools view $ARGV[0] |") or die"";
 while(<IN>){
 	chomp;
 	my $mapq = (split/\s+/,$_)[4];
+	my ($NM,$XM,$XO,$XG);
 	if(/NM:i:(\d)/){
 		$NM = $1;
 		}
