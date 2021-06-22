@@ -9,7 +9,7 @@ import pysam
 def get_opt():
 	group = argparse.ArgumentParser()
 	group.add_argument('-r', '--ref', help='reference contig level assembly', required=True)
-	group.add_argument('-g', '--alleletable', help='Allele.gene.table', required=True)
+	group.add_argument('-g', '--alleletable', help='Allele.ctg.table', required=True)
 	group.add_argument('-b', '--bam', help='bam file, default: prunning.bam', default='prunning.bam')
 	group.add_argument('-d', '--workdir', help='work directory, default: wrk_dir', default='wrk_dir')
 	group.add_argument('-t', '--thread', help='threads, default: 10', type=int, default=10)
