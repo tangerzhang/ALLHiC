@@ -8,7 +8,7 @@ if ((!defined $opt_g)|| (!defined $opt_r)) {
     die "************************************************************************
     Usage: perl $0 -g Allele.ctg.table -r draft.asm.fasta
       -h : help and usage.
-      -g : Allele.gene.table 
+      -g : Allele.ctg.table 
       -b : optional,default prunning.bam
       -r : reference ctg assembly
       -d : optional, default wrk_dir
