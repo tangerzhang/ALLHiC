@@ -75,7 +75,7 @@ samtools faidx seq.fasta
 
 
 ### 1st round of mapping
-bwa mem -t $threads seq.fasta Lib_R1.fastq.gz Lib_R2.fastq.gz \
+bwa mem -SP5M -t $threads seq.fasta Lib_R1.fastq.gz Lib_R2.fastq.gz \
      | samtools view -hF 256 - \
      | samtools sort -@ $threads -o sorted.bam -T tmp.ali
 samtools index sorted.bam
@@ -86,7 +86,7 @@ ALLHiC_corrector -m sorted.bam -r seq.fasta -o seq.HiCcorrected.fasta -t $thread
 ### 2nd round of mapping
 bwa index seq.HiCcorrected.fasta
 samtools faidx seq.HiCcorrected.fasta
-bwa mem -t $threads seq.HiCcorrected.fasta Lib_R1.fastq.gz Lib_R2.fastq.gz \
+bwa mem -SP5M -t $threads seq.HiCcorrected.fasta Lib_R1.fastq.gz Lib_R2.fastq.gz \
      | samtools view -hF 256 - \
      | samtools sort -@ $threads -o sample.bwa_mem.bam -T tmp.ali
 
