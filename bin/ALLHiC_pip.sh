@@ -101,7 +101,7 @@ ALLHiC_partition -r seq.HiCcorrected.fasta -e $enzyme -k $group_count -b sample.
 ### optimize
 rm cmd.list
 for((K=1;K<=$group_count;K++));do echo "allhic optimize sample.unique.REduced.paired_only.counts_${enzyme}.${group_count}g${K}.txt sample.unique.REduced.paired_only.clm" >> cmd.list;done
-ParaFly -c cmd.list -CPU $group_count
+ParaFly -c cmd.list -CPU $threads
 
 ### build
 ALLHiC_build seq.HiCcorrected.fasta
