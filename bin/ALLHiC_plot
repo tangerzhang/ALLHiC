@@ -61,7 +61,7 @@ def calc_read_count_per_min_size(chr_len_db, chr_order, bam, agp, min_size):
     ctg_on_chr = {}
     with open(agp, 'r') as f_in:
         for line in f_in:
-            if line.strip() == '':
+            if line.strip() == '' or line.strip().startswith('#'):
                 continue
             data = line.strip().split()
             if data[4] == 'U':
