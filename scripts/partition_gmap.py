@@ -107,10 +107,23 @@ def partition_gmap(ref, allele_table, bam, wrkdir, threads):
 	if len(chrn_db) < threads:
 		threads = len(chrn_db)
 	pool = multiprocessing.Pool(processes=threads)
+	result_list = list()
 	for chrn in chrn_db:
-		pool.apply_async(split_files, (chrn, allele_table, ref, bam, wrkdir,))
+		result_list.append([chrn, pool.apply_async(split_files, (chrn, allele_table, ref, bam, wrkdir,))])
 	pool.close()
 	pool.join()
+
+	error_list = list()
+	for chrn, result in result_list:
+		try:
+			result.get()
+		except Exception as e:
+			print('Exception raised when dealing with {}: {}'.format(chrn, e))
+			error_list.append(chrn)
+
+	if error_list:
+		raise Exception("{} exception(s) detected in : {}".format(len(error_list), ', '.join(error_list)))
+
 	print("Notice: If you got errors of \"Length mismatch\" during allhic extract, it is normal because we split bam with the same header, it will not effect the result")
 	print("Finished")
 
